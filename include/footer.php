@@ -3,7 +3,7 @@
   </div>
   <!-- /.content-wrapper -->
   <footer class="main-footer">
-    <strong>&copy; By Dao Xuan Dat, based on AdminLTE.</strong>
+    <strong>&copy; By <a href="https://www.facebook.com/xuan.datbing" target="_blank">Dao Xuan Dat</a>, based on AdminLTE.</strong>
     All rights reserved.
     <div class="float-right d-none d-sm-inline-block">
       <b>Version</b> 1.0

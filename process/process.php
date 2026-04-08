@@ -267,13 +267,37 @@ if ($action === "delete_submission") {
 
 // --- CHATBOT ---
 if ($action === "save_instruction") {
-    $res = call_api("POST", "/chatbot/instruction", ["text" => $_POST["text"] ?? ""]);
-    alert($res["status"], $res["message"]);
+
+    $text = $_POST["text"] ?? null;
+
+    if ($text === null) {
+        alert("error", "Không có nội dung để lưu!");
+    }
+
+    try {
+        $path = __DIR__ . "/../instructions.txt";
+        file_put_contents($path, $text);
+        alert("success", "Đã lưu thành công!");
+    } catch (Exception $e) {
+        alert("error", "Lỗi khi lưu file: " . $e->getMessage());
+    }
 }
 
 if ($action === "save_knowledge") {
-    $res = call_api("POST", "/chatbot/knowledge", ["text" => $_POST["text"] ?? ""]);
-    alert($res["status"], $res["message"]);
+
+    $text = $_POST["text"] ?? null;
+
+    if ($text === null) {
+        alert("error", "Không có nội dung để lưu!");
+    }
+
+    try {
+        $path = __DIR__ . "/../knowledges.txt";
+        file_put_contents($path, $text);
+        alert("success", "Đã lưu tri thức thành công!");
+    } catch (Exception $e) {
+        alert("error", "Lỗi khi lưu file: " . $e->getMessage());
+    }
 }
 
 // --- NEWS ---
