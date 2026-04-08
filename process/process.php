@@ -3,10 +3,9 @@ session_start();
 header("Content-Type: application/json");
 
 require_once "./db_my.php";
-require_once "./db_pg.php";
 require_once "./functions.php";
 
-// Chỉ cho phép POST
+
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     alert("error", "Phương thức không hợp lệ!");
     exit();
@@ -14,704 +13,40 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 
 $action = $_POST["action"] ?? null;
 
-/*-------------------------------LOGIN.PHP-------------------------------*/
 
 /*
-|--------------------------------------------------------------------------
-| LOGIN (AJAX)
-|--------------------------------------------------------------------------
+|==========================================================================
+| PHẦN 1: XỬ LÝ ADMIN BẰNG MYSQL (Giữ nguyên)
+|==========================================================================
 */
-if ($action === "login") {
 
+if ($action === "login") {
     $email = trim($_POST["email"] ?? "");
     $password = trim($_POST["password"] ?? "");
 
-    if ($email === "" || $password === "") {
-        alert("error", "Vui lòng nhập email và mật khẩu!");
-    }
+    if ($email === "" || $password === "") alert("error", "Vui lòng nhập email và mật khẩu!");
 
     try {
         $stmt = $mysql->prepare("SELECT * FROM users WHERE email = :email LIMIT 1");
         $stmt->execute(["email" => $email]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$user) {
-            alert("error", "Email không tồn tại!");
-        }
+        if (!$user) alert("error", "Email không tồn tại!");
+        if (!password_verify($password, $user["password"])) alert("error", "Mật khẩu không đúng!");
 
-        if (!password_verify($password, $user["password"])) {
-            alert("error", "Mật khẩu không đúng!");
-        }
-
-        // SAVE SESSION
         $_SESSION["logged_in"] = true;
         $_SESSION["user"] = [
             "id" => $user["id"],
         ];
 
+        $_SESSION["nestjs_token"] = call_api("POST", "/auth/adminLogin", [
+            "id" => $user["id"],
+            "name" => $user["fullName"],
+        ])["access_token"];
+        
         alert("success", "Đăng nhập thành công!");
-
     } catch (Exception $e) {
         alert("error", "Lỗi server: " . $e->getMessage());
-    }
-}
-
-/*-------------------------------MEMBERS.PHP-------------------------------*/
-
-/*
-|--------------------------------------------------------------------------
-| CREATE DEMO MEMBER
-|--------------------------------------------------------------------------
-*/
-if ($action === "create_demo_account") {
-    $studentId  = trim($_POST['studentId'] ?? "");
-    $fullName   = trim($_POST['fullName'] ?? "");
-    $unionGroup = trim($_POST['unionGroup'] ?? "");
-    $position   = trim($_POST['position'] ?? "Đoàn viên");
-
-    $check = $pg->prepare('SELECT COUNT(*) FROM "User" WHERE "studentId" = :id');
-    $check->execute([":id" => $studentId]);
-    if ($check->fetchColumn() > 0) {
-        alert("error", "Mã Đoàn viên này đã tồn tại!");
-    }
-
-    // Hash mật khẩu mặc định 123456
-    $defaultPass = password_hash("123456", PASSWORD_BCRYPT);
-
-    try {
-        $sql = 'INSERT INTO "User" ("studentId", "fullName", "unionGroup", "position", "password") 
-                VALUES (:id, :name, :group, :pos, :pass)';
-        
-        $stmt = $pg->prepare($sql);
-        $stmt->execute([
-            ":id"    => $studentId,
-            ":name"  => $fullName,
-            ":group" => $unionGroup,
-            ":pos"   => $position,
-            ":pass"  => $defaultPass
-        ]);
-
-        alert("success", "Đã tạo tài khoản demo: $fullName ($studentId)");
-    } catch (Exception $e) {
-        alert("error", "Lỗi SQL: " . $e->getMessage());
-    }
-}
-
-/*
-|--------------------------------------------------------------------------
-| UPDATE MEMBER
-|--------------------------------------------------------------------------
-*/
-if ($action === "update_member") {
-
-    // Thêm trim() cho ID để tránh lỗi dư khoảng trắng
-    $id       = trim($_POST["studentId"] ?? "");
-    $name     = trim($_POST["fullName"] ?? "");
-    $group    = trim($_POST["unionGroup"] ?? "");
-    $position = trim($_POST["position"] ?? "");
-
-    // Validate dữ liệu
-    if ($id === "") {
-        alert("error", "Lỗi: Không tìm thấy ID thành viên (Vui lòng kiểm tra lại ô input ID)!");
-    }
-
-    if ($name === "") {
-        alert("error", "Vui lòng nhập họ tên!");
-    }
-
-    try {
-        // Query Update
-        $sql = 'UPDATE "User" 
-                SET "fullName"   = :name,
-                    "unionGroup" = :group,
-                    "position"   = :position
-                WHERE "studentId" = :id';
-
-        $stmt = $pg->prepare($sql);
-        
-        $stmt->execute([
-            ":name"     => $name,
-            ":group"    => $group,
-            ":position" => $position,
-            ":id"       => $id
-        ]);
-        
-        alert("success", "Cập nhật thông tin thành công!");
-
-    } catch (Exception $e) {
-        alert("error", "Lỗi hệ thống: " . $e->getMessage());
-    }
-}
-
-/*
-|--------------------------------------------------------------------------
-| DELETE MEMBER
-|--------------------------------------------------------------------------
-*/
-if ($action === "delete_single_member") {
-
-    $id = $_POST["id"] ?? null;
-
-    try {
-        $stmt = $pg->prepare('DELETE FROM "User" WHERE "studentId" = ?');
-        $stmt->execute([$id]);
-
-        if ($stmt->rowCount() === 0) {
-            alert("error", "Không tìm thấy đoàn viên!");
-        }
-
-        alert("success", "Đã xóa đoàn viên!");
-
-    } catch (Exception $e) {
-        alert("error", "Lỗi xóa đoàn viên: " . $e->getMessage());
-    }
-}
-/*
-|--------------------------------------------------------------------------
-| RESET PASSWORD – đặt về 123456
-|--------------------------------------------------------------------------
-*/
-if ($action === "reset_password") {
-
-    $id = $_POST["id"] ?? null;
-
-    if (!$id) alert("error", "Thiếu studentId!");
-
-    try {
-        $newPass = password_hash("123456", PASSWORD_BCRYPT);
-
-        $stmt = $pg->prepare('UPDATE "User" SET "password" = ? WHERE "studentId" = ?');
-        $stmt->execute([$newPass, $id]);
-
-        if ($stmt->rowCount() === 0) {
-            alert("error", "Không tìm thấy đoàn viên!");
-        }
-
-        alert("success", "Đã reset mật khẩu về 123456!");
-
-    } catch (Exception $e) {
-        alert("error", "Lỗi reset mật khẩu: " . $e->getMessage());
-    }
-}
-
-/*
-|------------------------------------------------------------------
-| IMPORT USER FROM EXCEL (.xlsx)
-|------------------------------------------------------------------
-*/
-if ($action === "import_user_excel") {
-    require_once __DIR__ . "/SimpleXLSX.php";
-
-    if (!isset($_FILES["file"])) {
-        alert("error", "Không có file upload!");
-    }
-
-    $filePath = $_FILES["file"]["tmp_name"];
-    if (!$xlsx = SimpleXLSX::parse($filePath)) {
-        alert("error", "Không đọc được file Excel!");
-    }
-
-    try {
-        $pg->beginTransaction();
-
-        $rows = $xlsx->rows();
-        $defaultPassHash = password_hash("123456", PASSWORD_BCRYPT);
-        
-        $insertValues = [];
-        $count = 0;
-
-        foreach ($rows as $i => $r) {
-            if ($i === 0) continue;
-
-            if (!isset($r[0]) || trim($r[0]) === "") continue;
-
-            $studentId  = trim($r[0]);
-            $fullName   = trim($r[1] ?? "");
-            $unionGroup = trim($r[2] ?? "");
-            
-            $position   = trim($r[3] ?? ""); 
-            
-            if ($position === "") $position = "Đoàn viên";
-
-            if ($fullName === "") continue;
-
-            $safeId         = pg_escape_string($studentId);
-            $safeFullName   = pg_escape_string($fullName);
-            $safeUnionGroup = pg_escape_string($unionGroup);
-            $safePosition   = pg_escape_string($position);
-
-            $insertValues[] = "('$safeId', '$safeFullName', '$safeUnionGroup', '$safePosition', '$defaultPassHash')";
-            $count++;
-        }
-
-        $chunks = array_chunk($insertValues, 500);
-
-        foreach ($chunks as $chunk) {
-            $valuesString = implode(", ", $chunk);
-            
-            $sql = '
-                INSERT INTO "User" ("studentId", "fullName", "unionGroup", "position", "password")
-                VALUES ' . $valuesString . '
-                ON CONFLICT ("studentId") DO UPDATE SET
-                    "fullName"   = EXCLUDED."fullName",
-                    "unionGroup" = EXCLUDED."unionGroup",
-                    "position"   = EXCLUDED."position";
-            ';
-            
-            $pg->query($sql);
-        }
-
-        $pg->commit();
-        alert("success", "Đã import $count đoàn viên!");
-
-    } catch (Exception $e) {
-        $pg->rollBack();
-        alert("error", "Lỗi import: " . $e->getMessage());
-    }
-}
-
-/*
-|--------------------------------------------------------------------------
-| DELETE ALL MEMBERS
-|--------------------------------------------------------------------------
-*/
-if ($action === "delete_all_members") {
-
-    if (!isset($_POST["confirm"]) || $_POST["confirm"] !== "yes") {
-        alert("error", "Hành động không được xác nhận!");
-    }
-
-    try {
-        $pg->query('DELETE FROM "User"');
-        alert("success", "Đã xóa hết tất cả đoàn viên!");
-    } catch (Exception $e) {
-        alert("error", "Lỗi xóa: " . $e->getMessage());
-    }
-}
-
-/*
-|--------------------------------------------------------------------------
-| RESET POINTS FOR ALL MEMBERS
-|--------------------------------------------------------------------------
-*/
-if ($action === "reset_points") {
-
-    try {
-        // Lấy tất cả nhiệm vụ
-        $missions = $pg->query('SELECT id FROM "Missions"')->fetchAll(PDO::FETCH_ASSOC);
-
-        // Tạo câu lệnh cập nhật điểm
-        $setParts = [];
-        $missionId=1;
-        foreach ($missions as $mission) {
-            $setParts[] = '"points_' . $missionId . '" = 0';
-            $missionId++;
-        }
-        $setParts[] = '"points" = 0'; // Reset tổng điểm
-        $setClause = implode(", ", $setParts);
-
-        // Cập nhật tất cả người dùng
-        $pg->query('UPDATE "User" SET ' . $setClause);
-
-        alert("success", "Đã reset điểm cho tất cả đoàn viên!");
-    } catch (Exception $e) {
-        alert("error", "Lỗi reset điểm: " . $e->getMessage());
-    }
-}
-
-/*-------------------------------MISSIONS_LIST.PHP-------------------------------*/
-
-/* 
-|--------------------------------------------------------------------------
-|   EDIT MISSION
-|--------------------------------------------------------------------------
-*/
-if ($action === "edit_mission") {
-
-    $id = $_POST["id"] ?? null;
-    $missionName = trim($_POST["missionName"] ?? "");
-    $for = trim($_POST["for"] ?? "");
-    $status = trim($_POST["status"] ?? "");
-
-    if (!$id) alert("error", "Thiếu ID nhiệm vụ!");
-
-    try {
-        $stmt = $pg->prepare('UPDATE "Missions"
-            SET "missionName" = :missionName,
-                "for"         = :for,
-                "status"      = :status
-            WHERE id = :id');
-
-        $stmt->execute([
-            ":missionName" => $missionName,
-            ":for"         => $for,
-            ":status"      => $status,
-            ":id"          => $id
-        ]);
-
-        alert("success", "Cập nhật nhiệm vụ thành công!");
-
-    } catch (Exception $e) {
-        alert("error", "Lỗi SQL: " . $e->getMessage());
-    }
-}
-
-
-/*
-|--------------------------------------------------------------------------
-|   RESET MISSION
-|--------------------------------------------------------------------------
-*/
-if ($action === "reset_mission") {
-
-    $id = $_POST["id"] ?? null;
-    if (!$id) alert("error", "Thiếu ID!");
-
-    try {
-        // $pg->beginTransaction();
-        // $stmt = $pg->prepare('DELETE FROM "MissionSubmission" WHERE "missionId" = ?');
-        // $stmt->execute([$id]);
-        // $stmt = $pg->prepare('UPDATE "Missions" SET "joined" = 0, "status" = \'close\' WHERE "id" = ?');
-        // $stmt->execute([$id]);
-        // $pg->commit();
-        $pg->query('DELETE FROM "MissionSubmission" WHERE "missionId" = '.$id);
-        $pg->query('UPDATE "Missions" SET "joined" = 0, "status" = \'close\', "missionName" = \'(Chưa đặt tên)\' WHERE "id" = '.$id);
-        alert("success", "Đã reset nhiệm vụ!");
-    } catch (Exception $e) {
-        $pg->rollBack();
-        alert("error", "Lỗi reset: " . $e->getMessage());
-    }
-}
-
-/*-------------------------------MISSIONS_APPROVAL.PHP-------------------------------*/
-
-// ===============================================
-// APPROVE NORMAL SUBMISSION
-// ===============================================
-if ($action === "approve_submission_normal") {
-
-    $id = $_POST["id"] ?? null;
-    if (!$id) alert("error", "Thiếu ID submission!");
-
-    try {
-        $sub = $pg->query('SELECT * FROM "MissionSubmission" WHERE id = '.$id)->fetch(PDO::FETCH_ASSOC);
-        if (!$sub) alert("error", "Submission không tồn tại!");
-
-        $missionId = intval($sub["missionId"]);
-        $studentId = $sub["studentId"];
-
-        $pointColumn = "\"points_{$missionId}\"";
-
-        $pg->query('UPDATE "MissionSubmission" SET status = \'approved\' WHERE id = '.$id);
-
-        $pg->query('UPDATE "User" SET 
-                       '.$pointColumn.' = '.$pointColumn.' + 1,
-                       points = points + 1
-                    WHERE "studentId" = \''.$studentId.'\'');
-
-        $pg->query('UPDATE "Missions" SET "joined" = "joined" + 1 WHERE id = '.$missionId);
-
-        alert("success", "Duyệt thành công! Đã cộng điểm nhiệm vụ.");
-
-    } catch (Exception $e) {
-        alert("error", "Lỗi: ".$e->getMessage());
-    }
-}
-
-
-// ===============================================
-// APPROVE + POST NEWS
-// ===============================================
-if ($action === "approve_submission_news") {
-
-    $id = $_POST["id"] ?? null;
-    if (!$id) alert("error", "Thiếu ID submission!");
-
-    try {
-
-        $sub = $pg->query('SELECT * FROM "MissionSubmission" WHERE id = '.$id)->fetch(PDO::FETCH_ASSOC);
-        if (!$sub) alert("error", "Submission không tồn tại!");
-
-        $missionId = intval($sub["missionId"]);
-        $studentId = $sub["studentId"];
-
-        $pointColumn = "\"points_{$missionId}\"";
-
-        $pg->query('UPDATE "MissionSubmission" SET status = \'approved\' WHERE id = '.$id);
-
-        $pg->query('UPDATE "User" SET 
-                       '.$pointColumn.' = '.$pointColumn.' + 1,
-                       points = points + 1
-                    WHERE "studentId" = \''.$studentId.'\'');
-
-        $pg->query('UPDATE "Missions" SET "joined" = "joined" + 1 WHERE id = '.$missionId);
-
-        $title   = "Bài nộp nhiệm vụ #".$sub["missionId"];
-        $content = $sub["note"] ?? "";
-        $image   = $sub["imageLink"];
-
-        $queryNews = '
-            INSERT INTO "News" ("authorId", "title", "content", "imageUrl", "submissionId") 
-            VALUES (
-                \''.$studentId.'\',
-                \''.$title.'\',
-                \''.$content.'\',
-                \''.$image.'\',
-                '.$sub["id"].'
-            )';
-
-        $pg->query($queryNews);
-
-        alert("success", "Đã duyệt + đăng News + cộng điểm!");
-
-    } catch (Exception $e) {
-        alert("error", "Lỗi: ".$e->getMessage());
-    }
-}
-
-// ===============================================
-// DELETE SUBMISSION
-// ===============================================
-if ($action === "delete_submission") {
-
-    $id = $_POST["id"];
-
-    try {
-        $pg->query('DELETE FROM "MissionSubmission" WHERE id = '.$id);
-        alert("success", "Đã xóa submission!");
-    } catch (Exception $e) {
-        alert("error", "Lỗi xóa: " . $e->getMessage());
-    }
-}
-
-/*-------------------------------CHATBOT_INSTRUCTIONS.PHP-------------------------------*/
-
-/*
-|--------------------------------------------------------------------------
-| SAVE INSTRUCTION TEXT
-|--------------------------------------------------------------------------
-*/
-if ($action === "save_instruction") {
-
-    $text = $_POST["text"] ?? null;
-
-    if ($text === null) {
-        alert("error", "Không có nội dung để lưu!");
-    }
-
-    try {
-        $path = __DIR__ . "/../instructions.txt";
-        file_put_contents($path, $text);
-        alert("success", "Đã lưu thành công!");
-    } catch (Exception $e) {
-        alert("error", "Lỗi khi lưu file: " . $e->getMessage());
-    }
-}
-
-/*-------------------------------CHATBOT_KNOWLEDGES.PHP-------------------------------*/
-
-/*
-|--------------------------------------------------------------------------
-| SAVE KNOWLEDGE TEXT
-|--------------------------------------------------------------------------
-*/
-if ($action === "save_knowledge") {
-
-    $text = $_POST["text"] ?? null;
-
-    if ($text === null) {
-        alert("error", "Không có nội dung để lưu!");
-    }
-
-    try {
-        $path = __DIR__ . "/../knowledges.txt";
-        file_put_contents($path, $text);
-        alert("success", "Đã lưu tri thức thành công!");
-    } catch (Exception $e) {
-        alert("error", "Lỗi khi lưu file: " . $e->getMessage());
-    }
-}
-
-if ($action === "test_pg") {
-    if (!$pg) alert("error", "PG NOT CONNECTED!");
-    alert("success", "PG OK!");
-}
-
-/*-------------------------------NEWS.PHP-------------------------------*/
-
-/*
-|--------------------------------------------------------------------
-| DELETE NEWS
-|--------------------------------------------------------------------
-*/
-if ($action === "delete_news") {
-
-    $id = intval($_POST["id"] ?? 0);
-    if ($id <= 0) alert("error", "Thiếu ID!");
-
-    try {
-        $pg->query('DELETE FROM "NewsLike" WHERE "newsId" = '.$id);
-        $pg->query('DELETE FROM "NewsComment" WHERE "newsId" = '.$id);
-        $pg->query('DELETE FROM "News" WHERE "id" = '.$id);
-        alert("success", "Đã xoá bài viết thành công!");
-
-    } catch (Exception $e) {
-        $pg->rollBack();
-        alert("error", "Lỗi xóa: " . $e->getMessage());
-    }
-}
-
-if ($action === "delete_all_news") {
-
-    try {
-        $pg->query('DELETE FROM "NewsLike"');
-        $pg->query('DELETE FROM "NewsComment"');
-        $pg->query('DELETE FROM "News"');
-        alert("success", "Đã xóa hết tất cả tin tức!");
-    } catch (Exception $e) {
-        alert("error", "Lỗi xóa: " . $e->getMessage());
-    }
-}
-
-/*-------------------------------MAIN_NEWS.PHP-------------------------------*/
-
-/*
-|--------------------------------------------------------------------------
-| ADD MAIN NEWS
-|--------------------------------------------------------------------------
-*/
-
-if ($action === "add_main_news") {
-
-    $link  = trim($_POST["link"] ?? "");
-    $image = trim($_POST["image"] ?? "");
-
-    if ($link === "" || $image === "") {
-        alert("error", "Vui lòng nhập đầy đủ!");
-    }
-
-    try {
-        $pg->query('INSERT INTO "main_news" (link, image)
-                    VALUES (\''.$link.'\', \''.$image.'\')');
-
-        alert("success", "Đã thêm bài!");
-    } catch (Exception $e) {
-        alert("error", $e->getMessage());
-    }
-}
-
-/*
-|--------------------------------------------------------------------------
-| EDIT MAIN NEWS
-|--------------------------------------------------------------------------
-*/
-if ($action === "edit_main_news") {
-
-    $id    = intval($_POST["id"] ?? 0);
-    $link  = trim($_POST["link"] ?? "");
-    $image = trim($_POST["image"] ?? "");
-
-    if ($id <= 0) alert("error", "Thiếu ID!");
-
-    try {
-        $pg->query('UPDATE "main_news"
-                    SET link = \''.$link.'\',
-                        image = \''.$image.'\'
-                    WHERE id = '.$id);
-
-        alert("success", "Đã cập nhật!");
-    } catch (Exception $e) {
-        alert("error", $e->getMessage());
-    }
-}
-
-/*
-|--------------------------------------------------------------------------
-| DELETE MAIN NEWS
-|--------------------------------------------------------------------------
-*/
-if ($action === "delete_main_news") {
-    $id = intval($_POST["id"] ?? 0);
-    if ($id <= 0) alert("error", "Thiếu ID!");
-
-    try {
-        $pg->query('DELETE FROM "main_news" WHERE id = '.$id);
-        alert("success", "Đã xóa!");
-    } catch (Exception $e) {
-        alert("error", $e->getMessage());
-    }
-}
-
-/*-------------------------------DIGIMAP.PHP-------------------------------*/
-
-/*
-|---------------------------------------------------------------------
-| ADD DIGIMAP
-|---------------------------------------------------------------------
-*/
-if ($action === "add_digi") {
-    $name = trim($_POST["pinName"]);
-    $link = trim($_POST["pinLink"]);
-
-    if ($name === "" || $link === "") alert("error", "Thiếu dữ liệu!");
-
-    try {
-        $pg->query('INSERT INTO "digiMap" ("pinName","pinLink","joined") 
-                    VALUES (\''.$name.'\', \''.$link.'\', 0)');
-        alert("success", "Đã thêm điểm mới!");
-    } catch (Exception $e) {
-        alert("error", $e->getMessage());
-    }
-}
-
-/*
-|---------------------------------------------------------------------
-| EDIT DIGIMAP
-|---------------------------------------------------------------------
-*/
-if ($action === "edit_digi") {
-    $id = $_POST["id"];
-    $name = trim($_POST["pinName"]);
-    $link = trim($_POST["pinLink"]);
-
-    try {
-        $pg->query('UPDATE "digiMap" SET 
-                       "pinName"=\''.$name.'\',
-                       "pinLink"=\''.$link.'\'
-                    WHERE id='.$id);
-        alert("success", "Đã lưu thay đổi!");
-    } catch (Exception $e) {
-        alert("error", $e->getMessage());
-    }
-}
-
-/*
-|---------------------------------------------------------------------
-| RESET DIGIMAP
-|---------------------------------------------------------------------
-*/
-if ($action === "reset_digi") {
-    $id = $_POST["id"];
-    try {
-        $pg->query('UPDATE "digiMap" SET "joined"=0 WHERE id='.$id);
-        alert("success", "Đã reset!");
-    } catch (Exception $e) {
-        alert("error", $e->getMessage());
-    }
-}
-
-/*
-|---------------------------------------------------------------------
-| DELETE DIGIMAP
-|---------------------------------------------------------------------
-*/
-if ($action === "delete_digi") {
-    $id = $_POST["id"];
-    try {
-        $pg->query('DELETE FROM "digiMap" WHERE id='.$id);
-        alert("success", "Đã xóa điểm!");
-    } catch (Exception $e) {
-        alert("error", $e->getMessage());
     }
 }
 
@@ -794,6 +129,7 @@ if ($action === "edit_admin") {
         alert("error", "Lỗi SQL: " . $e->getMessage());
     }
 }
+
 /*
 |--------------------------------------------------------------------
 | RESET ADMIN PASSWORD
@@ -845,6 +181,154 @@ if ($action === "delete_admin") {
     }
 }
 
+
+
+/*
+|==========================================================================
+| PHẦN 2: XỬ LÝ DỮ LIỆU BẰNG NESTJS API (cURL)
+|==========================================================================
+*/
+
+// --- MEMBERS ---
+if ($action === "create_demo_account") {
+    $res = call_api("POST", "/members/demo", $_POST);
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "update_member") {
+    $id = trim($_POST["studentId"] ?? "");
+    $res = call_api("PUT", "/members/" . urlencode($id), $_POST);
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "delete_single_member") {
+    $id = trim($_POST["id"] ?? "");
+    $res = call_api("DELETE", "/members/" . urlencode($id));
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "reset_password") {
+    $id = trim($_POST["id"] ?? "");
+    $res = call_api("PATCH", "/members/" . urlencode($id) . "/reset-password");
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "import_user_excel") {
+    if (!isset($_FILES["file"])) alert("error", "Không có file upload!");
+    
+    // Tạo CURLFile để gửi qua API
+    $cfile = new CURLFile($_FILES["file"]["tmp_name"], $_FILES["file"]["type"], $_FILES["file"]["name"]);
+    $data = ["file" => $cfile];
+    
+    $res = call_api("POST", "/members/import", $data, true);
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "delete_all_members") {
+    $res = call_api("DELETE", "/members", ["confirm" => $_POST["confirm"] ?? ""]);
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "reset_points") {
+    $res = call_api("PATCH", "/members/reset-points");
+    alert($res["status"], $res["message"]);
+}
+
+// --- MISSIONS ---
+if ($action === "edit_mission") {
+    $id = $_POST["id"] ?? "";
+    $res = call_api("PUT", "/missions/" . $id, $_POST);
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "reset_mission") {
+    $id = $_POST["id"] ?? "";
+    $res = call_api("PATCH", "/missions/" . $id . "/reset");
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "approve_submission_normal") {
+    $id = $_POST["id"] ?? "";
+    $res = call_api("PATCH", "/submissions/" . $id . "/approve-normal");
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "approve_submission_news") {
+    $id = $_POST["id"] ?? "";
+    $res = call_api("PATCH", "/submissions/" . $id . "/approve-news");
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "delete_submission") {
+    $id = $_POST["id"] ?? "";
+    $res = call_api("DELETE", "/submissions/" . $id);
+    alert($res["status"], $res["message"]);
+}
+
+// --- CHATBOT ---
+if ($action === "save_instruction") {
+    $res = call_api("POST", "/chatbot/instruction", ["text" => $_POST["text"] ?? ""]);
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "save_knowledge") {
+    $res = call_api("POST", "/chatbot/knowledge", ["text" => $_POST["text"] ?? ""]);
+    alert($res["status"], $res["message"]);
+}
+
+// --- NEWS ---
+if ($action === "delete_news") {
+    $id = $_POST["id"] ?? "";
+    $res = call_api("DELETE", "/news/" . $id);
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "delete_all_news") {
+    $res = call_api("DELETE", "/news");
+    alert($res["status"], $res["message"]);
+}
+
+// --- MAIN NEWS ---
+if ($action === "add_main_news") {
+    $res = call_api("POST", "/main-news", $_POST);
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "edit_main_news") {
+    $id = $_POST["id"] ?? "";
+    $res = call_api("PUT", "/main-news/" . $id, $_POST);
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "delete_main_news") {
+    $id = $_POST["id"] ?? "";
+    $res = call_api("DELETE", "/main-news/" . $id);
+    alert($res["status"], $res["message"]);
+}
+
+// --- DIGIMAP ---
+if ($action === "add_digi") {
+    $res = call_api("POST", "/digimap", $_POST);
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "edit_digi") {
+    $id = $_POST["id"] ?? "";
+    $res = call_api("PUT", "/digimap/" . $id, $_POST);
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "reset_digi") {
+    $id = $_POST["id"] ?? "";
+    $res = call_api("PATCH", "/digimap/" . $id . "/reset");
+    alert($res["status"], $res["message"]);
+}
+
+if ($action === "delete_digi") {
+    $id = $_POST["id"] ?? "";
+    $res = call_api("DELETE", "/digimap/" . $id);
+    alert($res["status"], $res["message"]);
+}
 
 // Nếu action không hợp lệ
 alert("error", "Invalid action!");

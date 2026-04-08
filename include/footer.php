@@ -52,5 +52,19 @@
 <script src="dist/js/adminlte.js"></script>
 <!-- AdminLTE for demo purposes -->
 <script src="dist/js/demo.js"></script>
+<script>
+  $(document).ready(function() {
+    $.ajaxSetup({
+        error: function(xhr) {
+            if (xhr.status === 401) {
+                toastr.clear();
+                
+                alert("Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại!");
+                window.location.href = '/login.php';
+            }
+        }
+    });
+});
+</script>
 </body>
 </html>

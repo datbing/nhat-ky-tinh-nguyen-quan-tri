@@ -79,7 +79,8 @@ $("#loginForm").on("submit", function(e) {
                 toastr.error(res.message);
             }
         },
-        error: function() {
+        error: function(err) {
+            console.log(err);
             toastr.error("Không thể kết nối server!");
         }
     });

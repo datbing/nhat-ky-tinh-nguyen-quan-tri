@@ -1,8 +1,15 @@
 <?php
 require './include/header.php';
-require './process/db_pg.php';
 
-$subs = $pg->query('SELECT * FROM "MissionSubmission" WHERE status = \'pending\' ORDER BY id')->fetchAll();
+
+$response = call_api("GET", "/missions");
+
+if ($response && isset($response['pendingSubs'])) {
+    $subs = $response['pendingSubs'];
+} else {
+    $subs = [];
+    echo "<div class='alert alert-warning'>Không thể lấy danh sách bài nộp từ hệ thống API.</div>";
+}
 ?>
 
 <div class="card">

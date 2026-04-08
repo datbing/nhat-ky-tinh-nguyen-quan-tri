@@ -1,29 +1,14 @@
 <?php
 require './include/header.php';
-require './process/db_pg.php';
 
-$missions = $pg->query('SELECT * FROM "Missions" ORDER BY id ASC')->fetchAll();
 
-$ranking = [];
+$response = call_api("GET", "/rankings");
 
-foreach ($missions as $m) {
-    $col = "points_" . $m["id"];
-
-    $stmt = $pg->query('
-        SELECT 
-            "studentId",
-            "fullName",
-            "unionGroup",
-            '.$col.' AS mission_points
-        FROM "User"
-        ORDER BY mission_points DESC
-        LIMIT 10
-    ');
-
-    $ranking[$m["id"]] = [
-        "mission" => $m,
-        "list" => $stmt->fetchAll()
-    ];
+if ($response && isset($response['rankingByMission'])) {
+    $ranking = $response['rankingByMission']; 
+} else {
+    $ranking = [];
+    echo "<div class='alert alert-danger'>Lỗi: Không thể tải bảng xếp hạng từ Backend.</div>";
 }
 ?>
 

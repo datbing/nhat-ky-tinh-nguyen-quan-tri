@@ -1,52 +1,31 @@
 <?php
 require './include/header.php';
-require './process/db_pg.php';
+// ==========================================
+// GỌI API DASHBOARD TỪ NESTJS (GỌI 1 LẦN DUY NHẤT)
+// ==========================================
+$data = call_api("GET", "/dashboard");
 
-// ======================
-// LẤY THỐNG KÊ TỪ POSTGRES
-// ======================
+// Nếu API lỗi hoặc không có dữ liệu, khởi tạo mảng rỗng để tránh văng lỗi giao diện
+if (!$data) {
+    echo "<div class='alert alert-danger'>Lỗi: Không thể kết nối với hệ thống Backend NestJS!</div>";
+    $data = [
+        'totalMembers' => 0, 'pendingSubs' => 0, 'openMissions' => 0, 'totalNews' => 0,
+        'topMembers' => [], 'unionStats' => [], 'latestSubs' => []
+    ];
+}
 
-// Tổng đoàn viên
-$totalMembers = $pg->query('SELECT COUNT(*) FROM "User"')->fetchColumn();
-
-// Tổng bài nộp còn pending
-$pendingSubs = $pg->query('SELECT COUNT(*) FROM "MissionSubmission" WHERE status = \'pending\'')->fetchColumn();
-
-// Nhiệm vụ đang mở
-$openMissions = $pg->query('SELECT COUNT(*) FROM "Missions" WHERE status = \'open\'')->fetchColumn();
-
-// Tổng tin tức
-$totalNews = $pg->query('SELECT COUNT(*) FROM "News"')->fetchColumn();
-
-// Top 5 đoàn viên điểm cao nhất
-$topMembers = $pg->query('
-    SELECT "studentId", "fullName", points
-    FROM "User"
-    ORDER BY points DESC
-    LIMIT 5
-')->fetchAll();
-
-// Thống kê chi đoàn (đếm đoàn viên theo chi đoàn)
-$unionStats = $pg->query('
-    SELECT "unionGroup", COUNT(*) as total
-    FROM "User"
-    GROUP BY "unionGroup"
-    ORDER BY total DESC
-')->fetchAll();
-
-// Lấy 5 bài nộp mới nhất
-$latestSubs = $pg->query('
-    SELECT m.*, u."fullName"
-    FROM "MissionSubmission" m
-    LEFT JOIN "User" u ON u."studentId" = m."studentId"
-    ORDER BY m.id DESC
-    LIMIT 5
-')->fetchAll();
+// Giải nén dữ liệu từ API trả về
+$totalMembers = $data['totalMembers'];
+$pendingSubs  = $data['pendingSubs'];
+$openMissions = $data['openMissions'];
+$totalNews    = $data['totalNews'];
+$topMembers   = $data['topMembers'];
+$unionStats   = $data['unionStats'];
 
 ?>
 
-<div class="row">
 
+<div class="row">
   <!-- Tổng đoàn viên -->
   <div class="col-lg-3 col-6">
     <div class="small-box bg-info">
@@ -119,26 +98,6 @@ $latestSubs = $pg->query('
         <?php endforeach; ?>
       </tbody>
     </table>
-  </div>
-</div>
-
-
-<!-- ========================= -->
-<!-- HOẠT ĐỘNG GẦN ĐÂY -->
-<!-- ========================= -->
-<div class="card mt-3">
-  <div class="card-header bg-dark text-white">
-    <h3 class="card-title">Bài nộp gần đây</h3>
-  </div>
-  <div class="card-body">
-    <?php foreach ($latestSubs as $s): ?>
-      <div class="border p-2 mb-2 rounded">
-        <b>#<?= $s["id"] ?></b> - 
-        <b><?= $s["fullName"] ?></b> 
-        đã nộp cho nhiệm vụ <b><?= $s["missionId"] ?></b>
-        <span class="badge badge-info ml-2"><?= $s["status"] ?></span>
-      </div>
-    <?php endforeach; ?>
   </div>
 </div>
 

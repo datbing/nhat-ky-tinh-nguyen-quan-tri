@@ -4,10 +4,16 @@ if ($user_info['adminLevel'] < 10) {
   echo "<script>location.href='/'</script>";
   exit();
 }
-require './process/db_pg.php';
 
-// Lấy danh sách pin
-$digi = $pg->query('SELECT * FROM "digiMap" ORDER BY id DESC')->fetchAll();
+$response = call_api("GET", "/digimap");
+
+// Kiểm tra dữ liệu trả về
+if ($response && isset($response['digi'])) {
+    $digi = $response['digi'];
+} else {
+    $digi = []; // Phòng trường hợp API lỗi thì mảng rỗng để không văng lỗi foreach
+    echo "<div class='alert alert-warning'>Không thể lấy dữ liệu từ hệ thống API.</div>";
+}
 ?>
 
 <div class="card">

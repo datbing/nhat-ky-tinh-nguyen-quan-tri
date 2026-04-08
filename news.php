@@ -4,28 +4,22 @@
     echo "<script>location.href='/'</script>";
     exit();
   }
-  require './process/db_pg.php';
+  
 
-  $limit = 10;
-  $page = isset($_GET["page"]) ? max(1, intval($_GET["page"])) : 1;
-  $offset = ($page - 1) * $limit;
+$page = isset($_GET["page"]) ? max(1, intval($_GET["page"])) : 1;
 
-  $stmt = $pg->prepare('
-      SELECT n.*, u."fullName"
-      FROM "News" n
-      LEFT JOIN "User" u ON u."studentId" = n."authorId"
-      ORDER BY n."id" DESC
-      LIMIT '.$limit.' OFFSET '.$offset.'
-  ');
-  $stmt->execute();
+$response = call_api("GET", "/news?page=$page");
 
-  $countStmt = $pg->query('SELECT COUNT(*) FROM "News"');
-
-
-  $totalRows = $countStmt->fetchColumn();
-  $totalPages = ceil($totalRows / $limit);
-
-  $news = $stmt->fetchAll();
+if ($response && isset($response['news'])) {
+    $news       = $response['news'];
+    $totalRows  = $response['pagination']['totalRows'];
+    $totalPages = $response['pagination']['totalPages'];
+} else {
+    $news       = [];
+    $totalRows  = 0;
+    $totalPages = 0;
+    echo "<div class='alert alert-danger'>Lỗi: Không thể lấy danh sách tin tức.</div>";
+}
 ?>
 
 <div class="card">
@@ -53,7 +47,7 @@
         <tr>
           <td><?= $n["id"] ?></td>
           <td><?= nl2br(htmlspecialchars($n["content"])) ?></td>
-          <td><?= $n["fullName"] ?: "Ẩn danh" ?></td>
+          <td><?= htmlspecialchars($n["author"]["fullName"] ?? $n["user"]["fullName"] ?? "Ẩn danh") ?></td>
           <td><?= date("d/m/Y", strtotime($n["createdAt"])) ?></td>
 
           <td>

@@ -4,9 +4,15 @@ if ($user_info['adminLevel'] < 10) {
   echo "<script>location.href='/'</script>";
   exit();
 }
-require './process/db_pg.php';
 
-$mainNews = $pg->query('SELECT * FROM "main_news" ORDER BY id DESC')->fetchAll();
+$apiResponse = call_api("GET", "/digimap");
+
+if ($apiResponse && isset($apiResponse['mainNews'])) {
+    $mainNews = $apiResponse['mainNews'];
+} else {
+    $mainNews = [];
+    echo "<div class='alert alert-warning'>Không thể kết nối API hoặc không có dữ liệu tin tức.</div>";
+}
 ?>
 
 <div class="card">
@@ -30,7 +36,6 @@ $mainNews = $pg->query('SELECT * FROM "main_news" ORDER BY id DESC')->fetchAll()
         <input type="text" class="form-control" name="image" placeholder="https://..." required>
       </div>
 
-      <!-- type="button" + onclick => KHÔNG submit GET nữa -->
       <button type="button" class="btn btn-primary" onclick="addMainNews()">
         <i class="fa fa-plus"></i> Thêm bài
       </button>

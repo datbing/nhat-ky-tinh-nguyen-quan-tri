@@ -4,42 +4,25 @@ if ($user_info['adminLevel'] < 10) {
   echo "<script>location.href='/'</script>";
   exit();
 }
-require './process/db_pg.php';
 
-// --- CONFIG ---
-$limit = 10; // mỗi trang 10 dòng
-$page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+$page   = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
 $search = trim($_GET['search'] ?? "");
+$limit  = 10;
 
-$offset = ($page - 1) * $limit;
+$endpoint = "/members?page=$page&limit=$limit&search=" . urlencode($search);
+$response = call_api("GET", $endpoint);
 
-// --- QUERY COUNT ---
-if ($search !== "") {
-    $countStmt = $pg->prepare('SELECT COUNT(*) FROM "User" WHERE "studentId" ILIKE :s OR "fullName" ILIKE :s');
-    $countStmt->execute([":s" => "%$search%"]);
+// 4. Kiểm tra và gán dữ liệu
+if ($response && isset($response['members'])) {
+    $members    = $response['members'];
+    $totalRows  = $response['pagination']['totalRows'];
+    $totalPages = $response['pagination']['totalPages'];
 } else {
-    $countStmt = $pg->query('SELECT COUNT(*) FROM "User"');
+    $members    = [];
+    $totalRows  = 0;
+    $totalPages = 0;
+    echo "<div class='alert alert-danger'>Không thể lấy danh sách đoàn viên từ API!</div>";
 }
-$totalRows = $countStmt->fetchColumn();
-$totalPages = ceil($totalRows / $limit);
-
-// --- QUERY DATA ---
-if ($search !== "") {
-    $stmt = $pg->prepare('SELECT * FROM "User"
-                          WHERE "studentId" ILIKE :s OR "fullName" ILIKE :s
-                          ORDER BY "studentId" ASC
-                          LIMIT :limit OFFSET :offset');
-    $stmt->bindValue(":s", "%$search%", PDO::PARAM_STR);
-} else {
-    $stmt = $pg->prepare('SELECT * FROM "User"
-                          ORDER BY "studentId" ASC
-                          LIMIT :limit OFFSET :offset');
-}
-
-$stmt->bindValue(":limit", $limit, PDO::PARAM_INT);
-$stmt->bindValue(":offset", $offset, PDO::PARAM_INT);
-$stmt->execute();
-$members = $stmt->fetchAll();
 ?>
 
 <div class="card">

@@ -1,20 +1,15 @@
 <?php
   require './include/header.php';
-  require './process/db_pg.php';
+  
 
-  $stmt = $pg->query('
-      SELECT 
-          "unionGroup",
-          SUM(points) AS total_points,
-          COUNT(*) AS member_count
-      FROM "User"
-      WHERE "unionGroup" IS NOT NULL AND "unionGroup" <> \'\'
-      GROUP BY "unionGroup"
-      ORDER BY total_points DESC
-      LIMIT 10
-  ');
+  $response = call_api("GET", "/rankings");
 
-  $ranks = $stmt->fetchAll();
+  if ($response && isset($response['rankUnion'])) {
+      $ranks = $response['rankUnion'];
+  } else {
+      $ranks = [];
+      echo "<div class='alert alert-danger'>Lỗi: Không thể tải bảng xếp hạng chi đoàn.</div>";
+  }
 ?>
 
 <div class="card">

@@ -1,19 +1,13 @@
 <?php
   require './include/header.php';
-  require './process/db_pg.php';
-
-  $stmt = $pg->query('
-    SELECT 
-          "studentId",
-          "fullName",
-          "unionGroup",
-          points
-    FROM "User"
-    ORDER BY points DESC
-    LIMIT 10
-  ');
-
-  $users = $stmt->fetchAll();
+  
+  $response = call_api("GET", "/rankings");
+  if ($response && isset($response['rankPersonal'])) {
+      $users = $response['rankPersonal'];
+  } else {
+      $users = [];
+      echo "<div class='alert alert-danger'>Lỗi: Không thể tải bảng xếp hạng.</div>";
+  }
 ?>
 
 <div class="card">

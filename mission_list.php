@@ -5,10 +5,15 @@ if ($user_info['adminLevel'] < 10) {
   exit();
 }
 
-require './process/db_pg.php';
 
-// Lấy tất cả nhiệm vụ (tối đa 5)
-$missions = $pg->query('SELECT * FROM "Missions" ORDER BY id ASC')->fetchAll();
+$response = call_api("GET", "/missions");
+
+if ($response && isset($response['missions'])) {
+    $missions = $response['missions'];
+} else {
+    $missions = [];
+    echo "<div class='alert alert-danger'>Không thể kết nối API hoặc không có dữ liệu nhiệm vụ.</div>";
+}
 ?>
 
 <div class="card">
